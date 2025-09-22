@@ -226,6 +226,8 @@ def get_ssl_context(server_side: bool) -> Optional[SSLContext]:
     # The OpenSSL name for ECDH curve secp256r1 is prime256v1
     ssl_context.set_ecdh_curve("prime256v1")
 
+    ssl_context.keylog_filename = "./ssl-keylog.txt"
+
     return ssl_context
 
 
@@ -1459,13 +1461,13 @@ class CertPath(str, Enum):
 
     # Charge point operator (CPO)
     SECC_LEAF_DER = "seccLeafCert.der"
-    SECC_LEAF_PEM = "seccLeafCert.pem"
+    SECC_LEAF_PEM = "secc2LeafCert.pem"
     CPO_SUB_CA2_DER = "cpoSubCA2Cert.der"
     CPO_SUB_CA1_DER = "cpoSubCA1Cert.der"
     V2G_ROOT_DER = "v2gRootCACert.der"
     V2G_ROOT_PEM = "v2gRootCACert.pem"
     # Needed for the 'certfile' parameter in ssl_context.load_cert_chain()
-    CPO_CERT_CHAIN_PEM = "cpoCertChain.pem"
+    CPO_CERT_CHAIN_PEM = "cpo2CertChain.pem"
 
     # Certificate provisioning service (CPS)
     CPS_LEAF_DER = "cpsLeafCert.der"
@@ -1503,7 +1505,7 @@ class KeyPath(str, Enum):
     MO_ROOT_PEM = "moRootCA.key"
 
     # Charge point operator (CPO)
-    SECC_LEAF_PEM = "seccLeaf.key"
+    SECC_LEAF_PEM = "secc2Leaf.key"
     CPO_SUB_CA2_PEM = "cpoSubCA2.key"
     CPO_SUB_CA1_PEM = "cpoSubCA1.key"
     V2G_ROOT_PEM = "v2gRootCA.key"

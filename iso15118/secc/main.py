@@ -7,6 +7,9 @@ from iso15118.secc.controller.simulator import SimEVSEController
 from iso15118.secc.secc_settings import Config
 from iso15118.shared.exificient_exi_codec import ExificientEXICodec
 
+import iso15118
+print(iso15118.__file__)
+
 logger = logging.getLogger(__name__)
 
 

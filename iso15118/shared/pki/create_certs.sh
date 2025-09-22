@@ -234,6 +234,11 @@ openssl x509 -req -in $CSR_PATH/seccLeafCert.csr -extfile configs/seccLeafCert.c
 #      implementing the TLS handshake
 cat $CERT_PATH/seccLeafCert.pem $CERT_PATH/cpoSubCA2Cert.pem $CERT_PATH/cpoSubCA1Cert.pem > $CERT_PATH/cpoCertChain.pem
 
+# 4.2) Create a second SECC certificate for the "compromised" charging station
+openssl ecparam -genkey -name $EC_CURVE | openssl ec $SYMMETRIC_CIPHER -passout pass:$password -out $KEY_PATH/secc2Leaf.key
+openssl req -new -key $KEY_PATH/secc2Leaf.key -passin pass:$password -config configs/secc2LeafCert.cnf -out $CSR_PATH/secc2LeafCert.csr
+openssl x509 -req -in $CSR_PATH/secc2LeafCert.csr -extfile configs/secc2LeafCert.cnf -extensions ext -CA $CERT_PATH/cpoSubCA2Cert.pem -CAkey $KEY_PATH/cpoSubCA2.key -passin pass:$password -set_serial 12348 -days $VALIDITY_SECC_LEAF_CERT -out $CERT_PATH/secc2LeafCert.pem
+cat $CERT_PATH/secc2LeafCert.pem $CERT_PATH/cpoSubCA2Cert.pem $CERT_PATH/cpoSubCA1Cert.pem > $CERT_PATH/cpo2CertChain.pem
 
 # 5) Create a self-signed OEMRootCA certificate (validity is up to the OEM)
 openssl ecparam -genkey -name $EC_CURVE | openssl ec $SYMMETRIC_CIPHER -passout pass:$password -out $KEY_PATH/oemRootCA.key

