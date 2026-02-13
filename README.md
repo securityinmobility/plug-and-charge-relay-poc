@@ -1,7 +1,11 @@
 # ISO15118 Plug and Charge Relay PoC
 
 This repository contains code in order to perform plug and charge relay attacks.
-It is part of a scientific paper titled "ISO 15118 Security Controls, Vulnerabilities and possible Remedies"
+It is part of a scientific paper titled "Charge It to My Neighbor: A Relay Attack on ISO 15118 Plug and Charge Payment"
+
+There are some PCAPNG files included in the root directory of this repository.
+These files already demonstrate the mechanism and feasibility of the attack.
+They can be reproduced using the steps described below.
 
 ## Single Command to Reproduce the PCAP
 TODO: dockerize the PoC
